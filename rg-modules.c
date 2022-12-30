@@ -1,21 +1,28 @@
 /**
  * @file rg-modules.c
  * @author liuqi (liuqi1@kylinos.cn)
- * @brief 
+ * @brief
  * @version 0.1
  * @date 2022-12-18
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
+// #define DEBUG
 #include "kyrg.h"
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/audit.h>
+#include <linux/string.h>
 
-struct rg_module{
+
+struct rg_module {
     struct list_head list;
     const char *name;
+    void *base;
+    unsigned long text_size;
+    unsigned long ro_size;
     char base_hash[HASH_SIZE];
 };
 
@@ -25,35 +32,29 @@ int add_rg_module(const char *name)
 {
     struct rg_module *rg_module;
     struct module *module;
-    void *base;
-    unsigned int text_size, ro_size;
-    
+
     module = ksyms_find_module(name);
-    if (IS_ERR_OR_NULL(module)){
-        pr_err("module %s not found", name);
+    if (IS_ERR_OR_NULL(module)) {
+        pr_err("module %s not found\n", name);
         return -ENOENT;
     }
-
-    __module_get(module);
 
     rg_module = kmalloc(sizeof(struct rg_module), GFP_KERNEL);
     if (IS_ERR(rg_module))
         return PTR_ERR(rg_module);
 
-    rg_module->name = name;
-    
-    base = module->__module_layout_align.base;
-    text_size = module->__module_layout_align.text_size;
-    ro_size = module->__module_layout_align.ro_size;
+    rg_module->name = kstrdup(name, GFP_KERNEL);
+    rg_module->base = module->core_layout.base;
+    rg_module->text_size = module->core_layout.text_size;
+    rg_module->ro_size = module->core_layout.ro_size;
 
-    hash_value(base, text_size, rg_module->base_hash)
+    hash_value(rg_module->base, rg_module->text_size, rg_module->base_hash);
+
+    pr_debug("name:%s, base: %lx, text:%lx", rg_module->name, (unsigned long)rg_module->base, rg_module->text_size);
 
     list_add(&rg_module->list, &rg_modules);
 
-    module_put(module);
-
     return 0;
-
 }
 
 void del_rg_module(const char *name)
@@ -62,8 +63,7 @@ void del_rg_module(const char *name)
 
     list_for_each_entry_safe(rg_module, tmp, &rg_modules, list)
     {
-        if (strcmp(rg_module->name, name) == 0)
-        {
+        if (strcmp(rg_module->name, name) == 0) {
             list_del(&rg_module->list);
             kfree(rg_module);
         }
@@ -74,37 +74,63 @@ int do_rg_modules(void)
 {
     struct rg_module *rg_module, *tmp;
     char hash[HASH_SIZE];
-    void *base;
-    unsigned int text_size, ro_size;
     struct module *module;
 
     list_for_each_entry_safe(rg_module, tmp, &rg_modules, list)
     {
+        pr_debug("guard module: %s\n", rg_module->name);
         module = ksyms_find_module(rg_module->name);
-        if (IS_ERR_OR_NULL(module)){
-            pr_warn("module %s is removed", rg_module->name);
+        if (IS_ERR_OR_NULL(module)) {
+            pr_info("module: %s has been removed\n", rg_module->name);
+            del_rg_module(rg_module->name);
             continue;
         }
 
-        __module_get(module);
+        hash_value(rg_module->base, rg_module->text_size, hash);
 
-        base = module->__module_layout_align.base;
-        text_size = module->__module_layout_align.text_size;
-        ro_size = module->__module_layout_align.ro_size;
-        hash_value(base, text_size, hash);
-
-        if (memcmp(hash, rg_module->base_hash, HASH_SIZE) != 0)
-        {
-            pr_warn("module %s has been modified", rg_module->name);
+        if (memcmp(hash, rg_module->base_hash, HASH_SIZE) != 0) {
+            audit_log(audit_context(), GFP_ATOMIC, AUDIT_KYRG, 
+                "module: %s has been modified\n", rg_module->name);
+            // pr_warn("module: %s has been modified\n", rg_module->name);
             continue;
         }
-
-        module_put(module);
     }
 
     return 0;
-
 }
 
+ssize_t show_rg_modules(char *buf, size_t size)
+{
+#define BUFFER_SIZE(total_buf_size, data_length) \
+    total_buf_size > data_length ? total_buf_size - data_length : 0
+    struct rg_module *module;
+    int len = 0;
 
+    len += snprintf(buf + len, BUFFER_SIZE(size, len), "name\tbase\tsize\n");
 
+    list_for_each_entry(module, &rg_modules, list)
+    {
+        len += snprintf(buf + len, BUFFER_SIZE(size, len),
+                        "%s\t%lx\t%lx\n",
+                        module->name,
+                        (unsigned long)module->base,
+                        (unsigned long)module->text_size);
+    }
+    return len;
+}
+
+int init_rg_modules(void)
+{
+    return 0;
+}
+
+void exit_rg_modules(void)
+{
+    struct rg_module *module, *module_tmp;
+
+    list_for_each_entry_safe(module, module_tmp, &rg_modules, list)
+    {
+        list_del(&module->list);
+        kfree(module);
+    }
+}
