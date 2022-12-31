@@ -13,7 +13,10 @@
 
 #include <linux/kernel.h>
 
-static enum RG_STATUS rg_status = RG_STATUS_RUNNING;
+static enum {
+    RG_STATUS_STOP = 0,
+    RG_STATUS_RUNNING,
+} rg_status = RG_STATUS_RUNNING;
 
 static unsigned long long rg_periodic_sec = 3; // seconds
 

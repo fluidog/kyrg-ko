@@ -13,11 +13,6 @@
 #define HASH_ALG_NAME "sha256"
 #define HASH_SIZE (256 >> 3)
 
-enum RG_STATUS {
-    RG_STATUS_STOP = 0,
-    RG_STATUS_RUNNING,
-};
-
 int ksyms_init(void);
 unsigned long ksyms_kallsyms_lookup_name(const char *name);
 // Call ksym_init() before using these below.
