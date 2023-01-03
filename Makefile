@@ -1,38 +1,45 @@
 ## Makefile for the Linux kernel module
 
-MODULE := kyrg
+TARGET := kyrg
 FILES := main.c kallsyms-lookup-name.c periodic-timer.c hash.c access-process-memory.c \
 		kyrg-core.c rg-processes.c rg-modules.c rg-kernel.c fs.c
 
 ifdef KERNELRELEASE
 
-obj-m += $(MODULE).o
-$(MODULE)-m := $(FILES:%.c=%.o)
+obj-m += $(TARGET).o
+$(TARGET)-m := $(FILES:%.c=%.o)
 
 else
 
-ifndef KDIR
-KDIR := /lib/modules/$(shell uname -r)/build
-endif
+KDIR ?= /lib/modules/$(shell uname -r)/build
 
 build: $(FILE)
 	make -C $(KDIR) M=$(shell pwd) modules
-	make -C test/ build
+
 clean:
 	make -C $(KDIR) M=$(shell pwd) clean
-	make -C test/ clean
 	rm -f $^
 
 install:
 	mkdir -p $(DESTDIR)/opt/kyrg
-	install -m 644 $(MODULE).ko  $(DESTDIR)/opt/kyrg
+	install -m 644 $(TARGET).ko  $(DESTDIR)/opt/kyrg
+
 
 test:
-	insmod $(MODULE).ko
+	insmod $(TARGET).ko
 	make -C test/ test
-	rmmod $(MODULE)
+	rmmod $(TARGET)
+
+build:build-test
+clean:clean-test
+build-test:
+	make -C test/ build
+clean-test:
+	make -C test/ clean
+
 
 include rpm.Makefile
+clean:clean-pkg
 
 .PHONY: build clean test install
 endif

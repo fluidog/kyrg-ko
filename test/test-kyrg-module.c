@@ -1,4 +1,4 @@
-
+// #define DEBUG
 #define pr_fmt(fmt) KBUILD_MODNAME": " fmt
 
 #include <linux/kernel.h>
@@ -16,6 +16,8 @@ static struct kprobe kp = {
         .symbol_name = symbol,
 };
 
+
+
 int __init init_main(void)
 {
 	int error = 0;
@@ -28,9 +30,9 @@ int __init init_main(void)
 		return error;
 	}
 
-	pr_info("kprobe registered at %pS\n", kp.addr);
+	pr_info("Modify the code at %pS\n", kp.addr);
 	
-	return error;
+	return 0;
 }
 
 void __exit exit_main(void)
@@ -45,4 +47,4 @@ module_exit(exit_main);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("liuqi");
 MODULE_VERSION("v0.1");
-MODULE_DESCRIPTION("test-kyrg-module");
+MODULE_DESCRIPTION("TEST_KYRG");

@@ -14,7 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-static int __init my_main(void)
+static int __init kyrg_register(void)
 {
     int error;
 
@@ -22,7 +22,7 @@ static int __init my_main(void)
     if (error < 0)
         return error;
 
-    error = hash_alg_init("sm3");
+    error = hash_alg_init("sha256");
     if (error < 0)
         return error;
 
@@ -37,7 +37,7 @@ static int __init my_main(void)
     return 0;
 }
 
-static void __exit my_exit(void)
+static void __exit kyrg_unregister(void)
 {
     exit_fs();
 
@@ -46,10 +46,14 @@ static void __exit my_exit(void)
     exit_rg();
 }
 
-module_init(my_main);
-module_exit(my_exit);
+#ifdef MODULE
+module_init(kyrg_register);
+#else
+late_initcall_sync(kyrg_register);
+#endif
+module_exit(kyrg_unregister);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("liuqi");
 MODULE_VERSION("v0.1");
-MODULE_DESCRIPTION("kyrg");
+MODULE_DESCRIPTION("KYRG");

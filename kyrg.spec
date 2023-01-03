@@ -29,8 +29,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %post
+insmod /opt/kyrg/kyrg.ko
 
 %preun
+rmmod kyrg
 
 %postun
 
