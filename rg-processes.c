@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2022
  *
  */
-
+// #define DEBUG
 #include "kyrg.h"
 
 #include <linux/kernel.h>
@@ -16,11 +16,11 @@
 #include <linux/sched/signal.h>
 #include <linux/audit.h>
 
-struct rg_vm_area;
 struct rg_process {
     struct list_head list;
     int pid;
-    int kill; // operations after guard
+    int enforce; // enforce kill process while process modified
+    int modified;  // 1: modified, 0:...
               // struct rg_area* areas[];  // all vm areas of this process
 };
 static LIST_HEAD(rg_processes);
@@ -31,7 +31,7 @@ struct rg_area {
     char base_hash[HASH_SIZE];
     int used;    // linked times by process
     int guarded; // false: is not guarded, true:...
-    int result;  // 0: guard success, 1: guard failed
+    int modified;  // 1: modified, 0:...
 };
 static LIST_HEAD(rg_areas);
 
@@ -63,7 +63,7 @@ static int access_mmap_cb(struct task_struct *task, struct vm_area_struct *mmap,
 
     list_for_each_entry(area, &rg_areas, list)
     {
-        if (area->path == &mmap->vm_file->f_path) {
+        if (area->path->dentry == mmap->vm_file->f_path.dentry) {
             break; // found
         }
     }
@@ -120,7 +120,7 @@ static int access_mmap_cb(struct task_struct *task, struct vm_area_struct *mmap,
             return 0;
         }
         if (area->guarded)
-            return area->result;
+            return area->modified;
 
         error = hash_value_init();
         if (error < 0)
@@ -135,10 +135,10 @@ static int access_mmap_cb(struct task_struct *task, struct vm_area_struct *mmap,
             goto err;
 
         memcmp(hash, area->base_hash, HASH_SIZE) == 0 ?
-            (area->result = 0) :
-            (area->result = 1);
+            (area->modified = 0) :
+            (area->modified = 1);
         area->guarded = true;
-        return area->result;
+        return area->modified;
     }
 
     pr_warn("unknown ops");
@@ -149,7 +149,7 @@ err:
     return error;
 }
 
-int add_rg_process(int pid, int kill)
+int add_rg_process(int pid, int enforce)
 {
     int error;
     struct rg_process *process;
@@ -159,7 +159,7 @@ int add_rg_process(int pid, int kill)
     list_for_each_entry(process, &rg_processes, list)
     {
         if (process->pid == pid) { // found
-            process->kill = kill;
+            process->enforce = enforce;
             return 0;
         }
     }
@@ -169,7 +169,8 @@ int add_rg_process(int pid, int kill)
         return PTR_ERR(process);
 
     process->pid = pid;
-    process->kill = kill;
+    process->enforce = enforce;
+    process->modified = 0;
 
     error = walk_process_mmaps(pid, access_mmap_cb, process);
     if (error < 0) {
@@ -216,11 +217,12 @@ int do_rg_processes(void)
     {
         pr_debug("guard process: %d\n", process->pid);
         error = walk_process_mmaps(process->pid, access_mmap_cb, process);
-        if (error == 0) // guard success
+        if (error == 0) // all ok
             continue;
 
-        if (error == 1) { // guard failed
-            if (process->kill) {
+        if (error == 1) { // process modified
+            process->modified = 1;
+            if (process->enforce) {
                 kill_pid(find_get_pid(process->pid), SIGTERM, 1);
                 del_rg_process(process->pid);
             }
@@ -230,7 +232,7 @@ int do_rg_processes(void)
         }
 
         if (error < 0) {           // guard with error
-            if (error == -ESRCH) { // process killed
+            if (error == -ESRCH) { // process killed by someone
                 pr_warn("process: %d has been killed\n", process->pid);
                 del_rg_process(process->pid);
                 continue;
@@ -252,17 +254,20 @@ ssize_t show_rg_processes(char *buf, size_t size)
     int len = 0;
     char *path = kmalloc(MAX_PATH_LEN, GFP_KERNEL);
 
-    len += snprintf(buf + len, BUFFER_SIZE(size, len), "pid\tkill\n");
+    len += snprintf(buf + len, BUFFER_SIZE(size, len), "pid\tenforce\tmodified\n");
 
     list_for_each_entry(process, &rg_processes, list)
     {
         len += snprintf(buf + len, BUFFER_SIZE(size, len),
-                        "%d\t%d\n",
+                        "%d\t%d\t%d\n",
                         process->pid,
-                        process->kill);
+                        process->enforce,
+                        process->modified);
     }
 
-    len += snprintf(buf + len, BUFFER_SIZE(size, len), "\nused\tguarded\tresult\tpath\n");
+    len += snprintf(buf + len, BUFFER_SIZE(size, len), \
+        "\nThe guarded areas by all processes:\n" \
+        "used\tguarded\tmodified\tpath\n");
 
     list_for_each_entry(area, &rg_areas, list)
     {
@@ -270,7 +275,7 @@ ssize_t show_rg_processes(char *buf, size_t size)
                         "%d\t%d\t%d\t%s\n",
                         area->used,
                         area->guarded,
-                        area->result,
+                        area->modified,
                         d_path(area->path, path, MAX_PATH_LEN));
     }
 

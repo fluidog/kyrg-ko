@@ -43,7 +43,7 @@ static ssize_t write_period(struct file *file, const char __user *buf,
 }
 
 /**
- * @brief  [add|del] <pid> <kill> eg. add 12364 1
+ * @brief  [add|del] <pid> <enforce> eg. add 12364 1
  *
  * @param file
  * @param buf
@@ -57,7 +57,7 @@ static ssize_t write_policy_proc(struct file *file, const char __user *buf,
     int error;
     ssize_t length = 0;
     char *kbuf, *tmp, *opt;
-    int pid, kill;
+    int pid, enforce;
 
     kbuf = kmalloc(size, GFP_KERNEL);
     if (IS_ERR_OR_NULL(kbuf))
@@ -79,11 +79,11 @@ static ssize_t write_policy_proc(struct file *file, const char __user *buf,
         length += kbuf - tmp;
 
         tmp = strsep(&kbuf, "\n");
-        if (unlikely(!tmp || !kbuf || kstrtos32(tmp, 10, &kill)))
+        if (unlikely(!tmp || !kbuf || kstrtos32(tmp, 10, &enforce)))
             goto err;
         length += kbuf - tmp;
 
-        error = add_rg_process(pid, kill);
+        error = add_rg_process(pid, enforce);
         if (!error)
             error = length; // return length
 
@@ -102,7 +102,7 @@ static ssize_t write_policy_proc(struct file *file, const char __user *buf,
     }
 
 err:
-    pr_debug("%s %d %d, return:%d\n", opt, pid, kill, error);
+    pr_debug("%s %d %d, return:%d\n", opt, pid, enforce, error);
     kfree(opt); // kbuf pointer have changed, opt points the original kbuf.
     return error;
 }
