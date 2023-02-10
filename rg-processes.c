@@ -199,10 +199,7 @@ int do_rg_processes(void)
 
 ssize_t show_rg_processes(char *buf, size_t size)
 {
-#define MAX_PATH_LEN 128
-#define BUFFER_SIZE(total_buf_size, data_length) \
-    total_buf_size > data_length ? total_buf_size - data_length : 0
-
+    #define MAX_PATH_LEN 128
     struct rg_process *process;
     struct rg_area *area;
     int len = 0;

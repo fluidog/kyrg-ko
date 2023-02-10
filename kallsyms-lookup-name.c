@@ -16,7 +16,7 @@
 #include <linux/version.h>
 #include <linux/kprobes.h>
 
-const char *ksyms_stext, *kysms_etext;
+const char *ksyms_stext, *ksyms_etext;
 struct module *(*ksyms_find_module)(const char *name);
 
 unsigned long ksyms_kallsyms_lookup_name(const char *name)
@@ -49,9 +49,9 @@ int ksyms_init(void)
 {
     ksyms_find_module = (typeof(ksyms_find_module))ksyms_kallsyms_lookup_name("find_module");
     ksyms_stext = (typeof(ksyms_stext))ksyms_kallsyms_lookup_name("_stext");
-    kysms_etext = (typeof(kysms_etext))ksyms_kallsyms_lookup_name("_etext");
+    ksyms_etext = (typeof(ksyms_etext))ksyms_kallsyms_lookup_name("_etext");
 
-    if (IS_ERR_OR_NULL(ksyms_find_module) || IS_ERR_OR_NULL(ksyms_stext) || IS_ERR_OR_NULL(kysms_etext)) {
+    if (IS_ERR_OR_NULL(ksyms_find_module) || IS_ERR_OR_NULL(ksyms_stext) || IS_ERR_OR_NULL(ksyms_etext)) {
         pr_err("ksyms not found");
         return -ENXIO;
     }

@@ -23,6 +23,7 @@ struct rg_module {
     void *base;
     unsigned long text_size;
     unsigned long ro_size;
+    bool modified;
     char base_hash[HASH_SIZE];
 };
 
@@ -32,6 +33,13 @@ int add_rg_module(const char *name)
 {
     struct rg_module *rg_module;
     struct module *module;
+
+    list_for_each_entry(rg_module, &rg_modules, list)
+    {
+        if (strcmp(rg_module->name, name) == 0) { // already added
+            return 0;
+        }
+    }
 
     module = ksyms_find_module(name);
     if (IS_ERR_OR_NULL(module)) {
@@ -45,6 +53,7 @@ int add_rg_module(const char *name)
 
     rg_module->name = kstrdup(name, GFP_KERNEL);
     rg_module->base = module->core_layout.base;
+    rg_module->modified = 0;
     rg_module->text_size = module->core_layout.text_size;
     rg_module->ro_size = module->core_layout.ro_size;
 
@@ -79,9 +88,11 @@ int do_rg_modules(void)
     list_for_each_entry_safe(rg_module, tmp, &rg_modules, list)
     {
         pr_debug("guard module: %s\n", rg_module->name);
+        rg_module->modified = 0;
+
         module = ksyms_find_module(rg_module->name);
         if (IS_ERR_OR_NULL(module)) {
-            pr_info("module: %s has been removed\n", rg_module->name);
+            pr_warn("module: %s has been removed\n", rg_module->name);
             del_rg_module(rg_module->name);
             continue;
         }
@@ -89,6 +100,7 @@ int do_rg_modules(void)
         hash_value(rg_module->base, rg_module->text_size, hash);
 
         if (memcmp(hash, rg_module->base_hash, HASH_SIZE) != 0) {
+            rg_module->modified = 1;
             audit_log(audit_context(), GFP_ATOMIC, AUDIT_KYRG, 
                 "module: %s has been modified\n", rg_module->name);
             // pr_warn("module: %s has been modified\n", rg_module->name);
@@ -101,20 +113,17 @@ int do_rg_modules(void)
 
 ssize_t show_rg_modules(char *buf, size_t size)
 {
-#define BUFFER_SIZE(total_buf_size, data_length) \
-    total_buf_size > data_length ? total_buf_size - data_length : 0
     struct rg_module *module;
     int len = 0;
-
-    len += snprintf(buf + len, BUFFER_SIZE(size, len), "name\tbase\tsize\n");
 
     list_for_each_entry(module, &rg_modules, list)
     {
         len += snprintf(buf + len, BUFFER_SIZE(size, len),
-                        "%s\t%lx\t%lx\n",
-                        module->name,
+                        "%lx-%lx\t%d\t%s\n",
                         (unsigned long)module->base,
-                        (unsigned long)module->text_size);
+                        (unsigned long)module->base+(unsigned long)module->text_size,
+                        module->modified,
+                        module->name);
     }
     return len;
 }

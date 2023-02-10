@@ -13,10 +13,13 @@
 #define HASH_ALG_NAME "sha256"
 #define HASH_SIZE (256 >> 3)
 
+#define BUFFER_SIZE(total_buf_size, data_length) \
+    total_buf_size > data_length ? total_buf_size - data_length : 0
+
 int ksyms_init(void);
 unsigned long ksyms_kallsyms_lookup_name(const char *name);
 // Call ksym_init() before using these below.
-extern const char *ksyms_stext, *kysms_etext;
+extern const char *ksyms_stext, *ksyms_etext;
 extern struct module *(*ksyms_find_module)(const char *name);
 
 void init_periodic_timer(int (*cb)(void), unsigned long long msecs_period);

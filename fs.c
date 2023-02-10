@@ -133,8 +133,6 @@ static ssize_t read_policy_proc(struct file *file, char __user *buf, size_t size
 
 static ssize_t read_policy_module(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
-#define BUFFER_SIZE(total_buf_size, data_length) \
-    total_buf_size > data_length ? total_buf_size - data_length : 0
     size_t length = 0;
     char *kbuf;
 
