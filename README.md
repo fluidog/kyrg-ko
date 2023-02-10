@@ -8,7 +8,7 @@
 
 默认情况不对进程、内核或模块进行防护。按需添加防护对象。
 
-1. 添加进程防护对象，格式：add <pid> <enforce>
+1. 添加进程防护对象，格式：add \<pid> \<enforce>
 
    ```bash
    # 添加防护 pid 为 1 的进程，度量失败后，不杀死进程。
@@ -17,7 +17,7 @@
    cat /sys/kernel/security/kyrg/policy_process
    ```
 
-2. 添加模块防护对象，格式：add <mod>
+2. 添加模块防护对象，格式：add \<mod>
 
    ```bash
    # 添加模块 kyrg
